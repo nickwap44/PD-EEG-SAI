@@ -32,7 +32,7 @@ This model was used to examine and confirm the ability of QEEG predictors to pre
 
 This model was used to measure the predictive power of the EEG-SAI sample of QEEG variables to SAI. The PD subset of predictors and the set of all QEEG predictors, both with MCI included as a confounding variable, were used to examine predictive power. EEG-SAI sample had the same high degree of multicollinearity as the EEG sample and a smaller set of subjects. The PLS algorithm was applied to the data set, but the model with an intercept only was selected as optimal. The ridge regression model was selected for SAI analysis as it can utilize the full set of EEG predictors.
 
-**Feedforward Neural Network**
+**Feedforward Neural Network (SAI)**
 
 To verify the findings from the EEG-SAI ridge regression models, feedforward neural network models were implemented. The R package “nnet” was used for implementation [4]. Feed-forward neural networks work by using the gradient descent algorithm. Weights are selected through nonlinear optimization to minimize the mean squared error over a training set. Each weight is then iteratively changed proportionally to its effect on the error. The cross-validated MSE was calculated for various values of the decay parameter (regularization parame-ter to avoid over-fitting) and the number of units in hidden layer.
 
