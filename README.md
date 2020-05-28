@@ -17,7 +17,7 @@ The five QEEG biomarkers were calculated for the four EEG frequency bands measur
 
 **Group Comparison**
 
-We used Student’s t-tests to examine the differences of electrophysiological measures localized to Fz-Cz and Pz-Oz electrodes, and the differences in power spectra across the whole brain between PD and non-PD.
+We used Student’s t-tests to examine the differences of electrophysiological measures localized to Fz-Cz and Pz-Oz electrodes and the differences in SAI.
 A Pearson’s Chi-squared test with Yates’ continuity correction was used to examine the correlation between PD status and MCI status for all participants.
 
 **Partial least squares for logistic regression (Disease Status)**
