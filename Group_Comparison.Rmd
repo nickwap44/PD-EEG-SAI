@@ -1,0 +1,82 @@
+---
+title: "Group Comparison"
+output: html_document
+---
+
+```{r Clear workspace}
+rm(list=ls())
+```
+
+
+```{r Load and setup EEG-Only data}
+data <- read.csv("../data/eegonly_dataset.csv")
+data_pd <- data[data$group==1,]
+data_con <- data[data$group==0,]
+```
+
+## Pearson's Chi-Squared Test -- PD and MCI
+
+```{r Chi-Squared Test}
+chisq.test(data$group, data$cognitive_status) 
+```
+
+## Fz-Cz/Pz-Oz Group Comparison
+
+```{r Calculate means and standard deviations by group}
+names <- colnames(data)
+names <- names[-c(41,42,43,44)]
+pd_m <- colMeans(data_pd[1:40])
+pd_sd <- apply(data_pd[1:40], 2, sd)
+con_m <- colMeans(data_con[1:40])
+con_sd <- apply(data_con[1:40], 2, sd)
+```
+
+```{r Create a table with t-test results}
+p <- rep(0,40)
+for (i in 1:40)
+{
+  model <- t.test(data[,i][data$group==1],data[,i][data$group==0])
+  p[i] <- model$p.value
+}
+eeg_table <- cbind(names, pd_m, pd_sd, con_m, con_sd, p)
+```
+
+## SAI Group Comparison
+
+```{r Load and Setup EEG-SAI data}
+sai <- read.csv('../data/eegsai_dataset.csv')
+sai_pd <- sai[sai$group==1,]
+sai_con <- sai[sai$group==0,]
+sai_mci <- sai[sai$cognitive_status==1,]
+sai_nor <- sai[sai$cognitive_status==0,]
+sai_pd_mci <- sai_pd[sai_pd$cognitive_status==1,]
+sai_pd_nor <- sai_pd[sai_pd$cognitive_status==0,]
+```
+
+```{r Run Student's T-tests}
+# % Unconditioned Trial
+t.test(sai_pd$on_sai_sai,sai_con$on_sai_sai,na.rm=TRUE)
+sd(sai_pd$on_sai_sai,na.rm=TRUE)
+sd(sai_con$on_sai_sai,na.rm=TRUE)
+
+t.test(sai_mci$on_sai_sai,sai_nor$on_sai_sai,na.rm=TRUE)
+sd(sai_mci$on_sai_sai,na.rm=TRUE)
+sd(sai_nor$on_sai_sai,na.rm=TRUE)
+
+t.test(sai_pd_mci$on_sai_sai,sai_pd_nor$on_sai_sai,na.rm=TRUE)
+sd(sai_pd_mci$on_sai_sai,na.rm=TRUE)
+sd(sai_pd_nor$on_sai_sai,na.rm=TRUE)
+
+# SAI Amplitude Z-score
+t.test(sai_pd$sai_amp_zscore,sai_con$sai_amp_zscore)
+sd(sai_pd$sai_amp_zscore)
+sd(sai_con$sai_amp_zscore)
+
+t.test(sai_mci$sai_amp_zscore,sai_nor$sai_amp_zscore)
+sd(sai_mci$sai_amp_zscore)
+sd(sai_nor$sai_amp_zscore)
+
+t.test(sai_pd_mci$sai_amp_zscore,sai_pd_nor$sai_amp_zscore)
+sd(sai_pd_mci$sai_amp_zscore)
+sd(sai_pd_nor$sai_amp_zscore)
+```

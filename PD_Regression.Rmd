@@ -1,0 +1,477 @@
+---
+title: "PD Regression"
+output: html_document
+---
+
+# Data Setup
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Clear environment}
+rm(list=ls())
+```
+
+```{r Load packages}
+library(plsRglm)
+library(pROC)
+library(glmnet)
+library(nnet)
+library(caret)
+```
+
+```{r Import dataset}
+eeg <- read.csv("/Users/nickw/OneDrive/Documents/Work/IBIC/PD-EEG-SAI/github/data/eegonly_dataset.csv")
+```
+
+# Partial Least Squares for Logistic Regression -- cognitive status included
+
+```{r Data prep for PLSLR - MCI}
+eegY<-r01_redcap_eeg_sai$group
+eegX<-r01_redcap_eeg_sai[,-42]
+eegX<-scale(eegX, center=TRUE, scale=TRUE)
+```
+
+```{r Run PLSLR model - MCI}
+# Set parameters
+set.seed(123)
+nt.1<-15; K.1<-10; n.boot<-150 
+
+#Repeat CV 150 times
+#This allows up to see what number of components consistently leads to the lowest number of out-of-sample misclassifications
+set.seed(123)
+#Set total number of features, folds (in CV), and bootstraps repititions
+cv.modpls.boot<-cv.plsRglm(dataY=eegY, dataX=eegX, nt=nt.1, modele="pls-glm-logistic", K=K.1, NK=n.boot)
+
+####################
+#Evaluate the classification performance and generate graphs
+pred.error<-matrix(0, nrow=n.boot, ncol=nt.1)
+pred.mclass<-matrix(0, nrow=n.boot, ncol=nt.1)
+auc.mat<-matrix(0, nrow=n.boot, ncol=nt.1)
+for(k in 1:n.boot){
+
+  #Calculate the max number of features that can be calculated for each k
+  #For a small subset of the bootstrap replications, this is less than 15  
+  ncol.1<-c()
+  for(ll in 1:K.1){
+    ncol.1<-c(ncol.1, ncol(cv.modpls.boot$results_kfolds[[k]][[ll]]))
+  }
+  print(min(ncol.1))
+  for(j in 1:min(ncol.1)){ #number of components/features, typically 15
+    dat.1<-c(); pred.1<-c()
+    for(i in 1:K.1){ #cross-validation folds
+      dat.1<-c(dat.1, (cv.modpls.boot$dataY_kfolds[[k]])[[i]])
+      pred.1<-c(pred.1,c(cv.modpls.boot$results_kfolds[[k]][[i]][,j]))
+    } #i
+	pred.error[k,j]<-mean((dat.1 - pred.1)^2)
+	pred.0.1<-rep(1, length(pred.1))
+	pred.0.1<-replace(pred.0.1, pred.1 < 0.5, 0)
+	pred.mclass[k,j]<-sum(pred.0.1 != dat.1)/length(dat.1)
+    roc_obj <- roc(dat.1, pred.1)
+	auc.mat[k,j]<-roc_obj$auc
+  } #j
+} #k
+
+#Adjust averages to account for zero entries!!
+pe.1<-apply(pred.error, 2, function(x) mean(x[x!=0]))
+mc.1<-apply((1-pred.mclass), 2, function(x) mean(x[x!=1]))
+auc.1<-apply(auc.mat, 2, function(x) mean(x[x!=0]))
+ft.1<-1:nt.1
+
+
+##################################################
+#Final model with xx components:
+num.comp<-which.max(auc.1)
+res.final<-plsRglm(dataY=eegY,dataX=eegX,nt=num.comp,modele="pls-glm-logistic", pvals.expli=TRUE)
+
+#res.final
+
+#Create a simplified view of W*: indicate only large positive values (with 1) and large negative values (with -1).  This gives a visual summary of which variables are  'grouped together' to create each of the 6 components.
+W.mat<-matrix(0,nrow=nrow(res.final$wwetoile), ncol=ncol(res.final$wwetoile))
+rownames(W.mat)<-colnames(eegX)
+colnames(W.mat)<-paste("Comp", 1:ncol(res.final$wwetoile), sep="")
+
+#Chose a somewhat arbitrary cut-off of 0.25 and -0.25 to extract predictors with 'large' weights assigned to them.
+W.mat <- replace(W.mat, res.final$wwetoile < -0.25, -1)
+W.mat <- replace(W.mat, res.final$wwetoile > 0.25, 1)
+
+#Print names of the predictors that group together to form each of the 6 components
+pred.names<-colnames(eegX)
+for(i in 1:ncol(W.mat)){
+  print(paste("Component", i))
+  TT<-W.mat[,i]==1
+  names.1<-paste(" 1", pred.names[TT])
+  TT<-W.mat[,i]==-1
+  names.2<-paste("-1", pred.names[TT])
+  print(c(names.1, names.2))
+}
+
+####################
+#Estimate the confidence intervals and ultimately p-values of the original predictors
+set.seed(123)
+bootYT8=bootplsglm(object=res.final, R=2000, typeboot="fmodel_np")
+
+#Graphical display of 95% CI's for each predictor
+temp.ci=confints.bootpls(bootYT8)
+
+#Graphical summary of the BCa CI's
+#Use the bias-corrected and accelerated (BCa) CI's because they typcially have better coverage performance compared to 'percentile' CI's
+x11(); plots.confints.bootpls(temp.ci,typeIC="BCa",colIC=c("blue","blue","blue","blue"), legendpos ="topright",las=2,mar=c(5,2,1,1)+0.1)
+
+#This graph gives a visual summary of the which predictors are significantly different from zero (those that do not cross the zero line)--i.e. are determined to play a role in explaining the outcome.
+
+#Estimated values of each coefficient and BCa 95% CI limits
+#Note that the intercept CI cannot be calculated by the method we are using!  Added -99 as placeholder
+coef.mat<-cbind(res.final$Std.Coeffs, rbind(c(-99,-99),temp.ci[,7:8]))
+colnames(coef.mat)<-c("Coef Estimate","Lower Limit","Upper Limit")
+
+###########################
+#Calculate p-values for the coefficients
+
+#Bootstrap samples that will be used to calculate p-values:
+#bootYT8$t0 #Coefficient estimate based on full model
+#bootYT8$t  #Bootstrap replications
+#Cols are predictors, rows are coeff estimate for each bootstrap repitition
+
+#Calculate CI's at range of specified confidence levels
+conf.set<-seq(from=0.01, to=0.99, by=0.01)
+bootobject<-bootYT8
+nr <- length(bootobject$t0)
+indices <- 1:nr
+
+#True alpha -values that correspond to the CI values
+alpha.levels<-c(conf.set, sort(conf.set, decreasing=TRUE))
+Lims<-matrix(0, nrow=nrow(bootYT8$t0), ncol=2*length(conf.set))
+rownames(Lims) <- dimnames(bootobject$t0)[[1]]
+colnames(Lims) <- paste("Alpha", alpha.levels)
+
+for(i in 1:length(conf.set)){
+print(i)
+conf.level<-conf.set[i]
+
+ii <- indices[1]
+temptemp.ci <- boot::boot.ci(bootobject, conf = conf.level, type = c("bca"), index=ii)$bca[,-c(1,2,3)]
+for (ii in indices[-1]){
+    temptemp.ci <- rbind(temptemp.ci, boot::boot.ci(bootobject, conf = conf.level, type = c("bca"), index=ii)$bca[,-c(1,2,3)])	
+}
+
+#Organize
+Lims[,length(conf.set)-(i-1)]<-temptemp.ci[,1]
+Lims[,length(conf.set)+i]<-temptemp.ci[,2]
+
+} #i
+#Checks
+
+#Use interpolation to estimate alpha value corresponding to 0
+p.val.vec<-rep(0,nrow(Lims))
+
+#Use conf.range instead of alpha.levels for purpose of interpolation 
+conf.range<-c(conf.set, conf.set+1)
+
+for(ind.1 in 1:nrow(Lims)){
+sum.pos<-sum(Lims[ind.1,]>0)
+sum.neg<-sum(Lims[ind.1,]<0)
+if(sum.pos==length(conf.range)){
+  p.val<- conf.range[1]*0.5
+}else if(sum.neg==length(conf.range)){
+  p.val<- conf.range[1]*0.5
+}else{
+  #round(Lims[ind.1,],3)
+  xnew=0
+  p.val<- approx(c(Lims[ind.1,]), conf.range, xout=xnew)$y
+  p.val<-replace(p.val, p.val > 1, 2-p.val)
+}
+
+p.val.vec[ind.1]<-p.val
+}
+
+#Model output: estimated coefficients, CI limits (for BCa method), and p-values.  
+coef.mat<-cbind(res.final$Std.Coeffs, rbind(c(-99,-99),temp.ci[,7:8]), c(1,p.val.vec))
+colnames(coef.mat)<-c("Coef Estimate","Lower Limit","Upper Limit", "p-value")
+#round(coef.mat, 4)
+
+#Display subset of significant predictors
+#Important: the value of 0.005 is a place holder for "< 0.01".  If you are looking for more fine-grained values into the tails (less than 0.01), let me know and I can adjust the code.  
+#Important: the p-value of 1 for Intercept should not be interpreted.  The method we use does not allow us to generate bootstrap samples for the intercept and, as a result, we cannot estimate a p-value.
+#round(coef.mat[coef.mat[,4]<0.05,], 4)
+
+W.mat=res.final$wwetoile
+
+#Number of features that maximizes the classification rate and the AUC
+which.max(mc.1)
+which.max(auc.1)
+
+#Classification performance graph
+#pdf(file = "Graphs/ClassificationPerformance1.pdf", width=8, height=4.5)	
+x11(); par(mfrow=c(1,2))
+plot(c(1,nt.1), c(0.50, 0.70), type="n", xlab="Number of features", ylab="Classification rate")
+points(ft.1, mc.1)
+lines(ft.1, mc.1)
+plot(c(1,nt.1), c(0.50, 0.70), type="n", xlab="Number of features", ylab="AUC")
+points(ft.1, auc.1)
+lines(ft.1, auc.1)
+#dev.off()
+
+round(coef.mat, 4)
+round(coef.mat[coef.mat[,4]<0.05,], 4)
+
+#save(pe.1, mc.1, auc.1, ft.1, coef.mat, W.mat, num.comp, file="RCode/PLSLR_Output.RData")
+
+#This is the output for the that corresponds to eegY<-eegY_all; eegX<-eegX_all
+#Use as input for ridge regression analysis with SAI as output and subset of significant EEG variables as predictors
+coef.mat.full.data<-coef.mat[coef.mat[,4]<0.05,]
+```
+
+# Partial Least Squares for Logistic Regression -- without cognitive status
+
+```{r Data prep for PLSLR - no MCI}
+eegY<-r01_redcap_eeg_sai$group
+eegX<-r01_redcap_eeg_sai[,-c(42,43)]
+eegX<-scale(eegX, center=TRUE, scale=TRUE)
+```
+
+```{r Run PLSLR model - no MCI}
+# Set parameters
+set.seed(123)
+nt.1<-15; K.1<-10; n.boot<-150 
+
+#Repeat CV 150 times
+#This allows up to see what number of components consistently leads to the lowest number of out-of-sample misclassifications
+set.seed(123)
+#Set total number of features, folds (in CV), and bootstraps repititions
+cv.modpls.boot<-cv.plsRglm(dataY=eegY, dataX=eegX, nt=nt.1, modele="pls-glm-logistic", K=K.1, NK=n.boot)
+
+####################
+#Evaluate the classification performance and generate graphs
+pred.error<-matrix(0, nrow=n.boot, ncol=nt.1)
+pred.mclass<-matrix(0, nrow=n.boot, ncol=nt.1)
+auc.mat<-matrix(0, nrow=n.boot, ncol=nt.1)
+for(k in 1:n.boot){
+
+  #Calculate the max number of features that can be calculated for each k
+  #For a small subset of the bootstrap replications, this is less than 15  
+  ncol.1<-c()
+  for(ll in 1:K.1){
+    ncol.1<-c(ncol.1, ncol(cv.modpls.boot$results_kfolds[[k]][[ll]]))
+  }
+  print(min(ncol.1))
+  for(j in 1:min(ncol.1)){ #number of components/features, typically 15
+    dat.1<-c(); pred.1<-c()
+    for(i in 1:K.1){ #cross-validation folds
+      dat.1<-c(dat.1, (cv.modpls.boot$dataY_kfolds[[k]])[[i]])
+      pred.1<-c(pred.1,c(cv.modpls.boot$results_kfolds[[k]][[i]][,j]))
+    } #i
+	pred.error[k,j]<-mean((dat.1 - pred.1)^2)
+	pred.0.1<-rep(1, length(pred.1))
+	pred.0.1<-replace(pred.0.1, pred.1 < 0.5, 0)
+	pred.mclass[k,j]<-sum(pred.0.1 != dat.1)/length(dat.1)
+    roc_obj <- roc(dat.1, pred.1)
+	auc.mat[k,j]<-roc_obj$auc
+  } #j
+} #k
+
+#Adjust averages to account for zero entries!!
+pe.1<-apply(pred.error, 2, function(x) mean(x[x!=0]))
+mc.1<-apply((1-pred.mclass), 2, function(x) mean(x[x!=1]))
+auc.1<-apply(auc.mat, 2, function(x) mean(x[x!=0]))
+ft.1<-1:nt.1
+
+
+##################################################
+#Final model with xx components:
+num.comp<-which.max(auc.1)
+res.final<-plsRglm(dataY=eegY,dataX=eegX,nt=num.comp,modele="pls-glm-logistic", pvals.expli=TRUE)
+
+#res.final
+
+#Create a simplified view of W*: indicate only large positive values (with 1) and large negative values (with -1).  This gives a visual summary of which variables are  'grouped together' to create each of the 6 components.
+W.mat<-matrix(0,nrow=nrow(res.final$wwetoile), ncol=ncol(res.final$wwetoile))
+rownames(W.mat)<-colnames(eegX)
+colnames(W.mat)<-paste("Comp", 1:ncol(res.final$wwetoile), sep="")
+
+#Chose a somewhat arbitrary cut-off of 0.25 and -0.25 to extract predictors with 'large' weights assigned to them.
+W.mat <- replace(W.mat, res.final$wwetoile < -0.25, -1)
+W.mat <- replace(W.mat, res.final$wwetoile > 0.25, 1)
+
+#Print names of the predictors that group together to form each of the 6 components
+pred.names<-colnames(eegX)
+for(i in 1:ncol(W.mat)){
+  print(paste("Component", i))
+  TT<-W.mat[,i]==1
+  names.1<-paste(" 1", pred.names[TT])
+  TT<-W.mat[,i]==-1
+  names.2<-paste("-1", pred.names[TT])
+  print(c(names.1, names.2))
+}
+
+####################
+#Estimate the confidence intervals and ultimately p-values of the original predictors
+set.seed(123)
+bootYT8=bootplsglm(object=res.final, R=2000, typeboot="fmodel_np")
+
+#Graphical display of 95% CI's for each predictor
+temp.ci=confints.bootpls(bootYT8)
+
+#Graphical summary of the BCa CI's
+#Use the bias-corrected and accelerated (BCa) CI's because they typcially have better coverage performance compared to 'percentile' CI's
+x11(); plots.confints.bootpls(temp.ci,typeIC="BCa",colIC=c("blue","blue","blue","blue"), legendpos ="topright",las=2,mar=c(5,2,1,1)+0.1)
+
+#This graph gives a visual summary of the which predictors are significantly different from zero (those that do not cross the zero line)--i.e. are determined to play a role in explaining the outcome.
+
+#Estimated values of each coefficient and BCa 95% CI limits
+#Note that the intercept CI cannot be calculated by the method we are using!  Added -99 as placeholder
+coef.mat<-cbind(res.final$Std.Coeffs, rbind(c(-99,-99),temp.ci[,7:8]))
+colnames(coef.mat)<-c("Coef Estimate","Lower Limit","Upper Limit")
+
+###########################
+#Calculate p-values for the coefficients
+
+#Bootstrap samples that will be used to calculate p-values:
+#bootYT8$t0 #Coefficient estimate based on full model
+#bootYT8$t  #Bootstrap replications
+#Cols are predictors, rows are coeff estimate for each bootstrap repitition
+
+#Calculate CI's at range of specified confidence levels
+conf.set<-seq(from=0.01, to=0.99, by=0.01)
+bootobject<-bootYT8
+nr <- length(bootobject$t0)
+indices <- 1:nr
+
+#True alpha -values that correspond to the CI values
+alpha.levels<-c(conf.set, sort(conf.set, decreasing=TRUE))
+Lims<-matrix(0, nrow=nrow(bootYT8$t0), ncol=2*length(conf.set))
+rownames(Lims) <- dimnames(bootobject$t0)[[1]]
+colnames(Lims) <- paste("Alpha", alpha.levels)
+
+for(i in 1:length(conf.set)){
+print(i)
+conf.level<-conf.set[i]
+
+ii <- indices[1]
+temptemp.ci <- boot::boot.ci(bootobject, conf = conf.level, type = c("bca"), index=ii)$bca[,-c(1,2,3)]
+for (ii in indices[-1]){
+    temptemp.ci <- rbind(temptemp.ci, boot::boot.ci(bootobject, conf = conf.level, type = c("bca"), index=ii)$bca[,-c(1,2,3)])	
+}
+
+#Organize
+Lims[,length(conf.set)-(i-1)]<-temptemp.ci[,1]
+Lims[,length(conf.set)+i]<-temptemp.ci[,2]
+
+} #i
+#Checks
+
+#Use interpolation to estimate alpha value corresponding to 0
+p.val.vec<-rep(0,nrow(Lims))
+
+#Use conf.range instead of alpha.levels for purpose of interpolation 
+conf.range<-c(conf.set, conf.set+1)
+
+for(ind.1 in 1:nrow(Lims)){
+sum.pos<-sum(Lims[ind.1,]>0)
+sum.neg<-sum(Lims[ind.1,]<0)
+if(sum.pos==length(conf.range)){
+  p.val<- conf.range[1]*0.5
+}else if(sum.neg==length(conf.range)){
+  p.val<- conf.range[1]*0.5
+}else{
+  #round(Lims[ind.1,],3)
+  xnew=0
+  p.val<- approx(c(Lims[ind.1,]), conf.range, xout=xnew)$y
+  p.val<-replace(p.val, p.val > 1, 2-p.val)
+}
+
+p.val.vec[ind.1]<-p.val
+}
+
+#Model output: estimated coefficients, CI limits (for BCa method), and p-values.  
+coef.mat<-cbind(res.final$Std.Coeffs, rbind(c(-99,-99),temp.ci[,7:8]), c(1,p.val.vec))
+colnames(coef.mat)<-c("Coef Estimate","Lower Limit","Upper Limit", "p-value")
+#round(coef.mat, 4)
+
+#Display subset of significant predictors
+#Important: the value of 0.005 is a place holder for "< 0.01".  If you are looking for more fine-grained values into the tails (less than 0.01), let me know and I can adjust the code.  
+#Important: the p-value of 1 for Intercept should not be interpreted.  The method we use does not allow us to generate bootstrap samples for the intercept and, as a result, we cannot estimate a p-value.
+#round(coef.mat[coef.mat[,4]<0.05,], 4)
+
+W.mat=res.final$wwetoile
+
+#Number of features that maximizes the classification rate and the AUC
+which.max(mc.1)
+which.max(auc.1)
+
+#Classification performance graph
+#pdf(file = "Graphs/ClassificationPerformance1.pdf", width=8, height=4.5)	
+x11(); par(mfrow=c(1,2))
+plot(c(1,nt.1), c(0.50, 0.70), type="n", xlab="Number of features", ylab="Classification rate")
+points(ft.1, mc.1)
+lines(ft.1, mc.1)
+plot(c(1,nt.1), c(0.50, 0.70), type="n", xlab="Number of features", ylab="AUC")
+points(ft.1, auc.1)
+lines(ft.1, auc.1)
+#dev.off()
+
+round(coef.mat, 4)
+round(coef.mat[coef.mat[,4]<0.05,], 4)
+
+#save(pe.1, mc.1, auc.1, ft.1, coef.mat, W.mat, num.comp, file="RCode/PLSLR_Output.RData")
+
+#This is the output for the that corresponds to eegY<-eegY_all; eegX<-eegX_all
+#Use as input for ridge regression analysis with SAI as output and subset of significant EEG variables as predictors
+coef.mat.full.data<-coef.mat[coef.mat[,4]<0.05,]
+```
+
+# Ridge Regression - Logistic
+
+```{r Data prep for RR}
+eegY<-r01_redcap_eeg_sai$group
+eegX<-r01_redcap_eeg_sai[,-42]
+eegX<-scale(eegX, center=TRUE, scale=TRUE)
+
+#Input matrices
+y.vec=as.factor(eegY)
+x.mat=(model.matrix(y.vec~eegX))[,-1]
+```
+
+```{r Ridge Regression}
+# Setup paramaters
+lambdas=10^seq(10,-2,length=200)
+
+# Run model
+fit <- glmnet(x.mat, y.vec, alpha = 0, lambda = lambdas, family = "binomial")
+summary(fit)
+
+#Estimate optimal AUC using ridge regression
+cv_fit <- cv.glmnet(x.mat, y.vec, alpha = 0, lambda = lambdas, family = "binomial", type.measure="auc")
+x11(); plot(cv_fit)
+opt_lambda_auc <- cv_fit$lambda.min
+cv_auc<-cv_fit$cvm[cv_fit$lambda==opt_lambda_auc]
+
+
+#Estimate optimal classification rate using ridge regression
+cv_fit <- cv.glmnet(x.mat, y.vec, alpha = 0, lambda = lambdas, family = "binomial", type.measure="class")
+x11(); plot(cv_fit)
+opt_lambda_class <- cv_fit$lambda.min
+
+#Classification rate
+cv_class<-1-cv_fit$cvm[cv_fit$lambda==opt_lambda_class]
+
+#Fitted model
+fit <- cv_fit$glmnet.fit
+summary(fit)
+
+#Predicted values
+y_predicted <- predict(fit, s = opt_lambda_auc, newx = x.mat, type="response")
+c(opt_lambda_auc, opt_lambda_class)
+c(cv_auc, cv_class)
+
+# Predict disease status and output scoring metrics
+y_predicted[y_predicted < 0.5] <- 0
+y_predicted[y_predicted >= 0.5] <- 1
+tp <- sum(y_predicted==0 & eegY==0)
+tn <- sum(y_predicted==1 & eegY==1)
+fp <- sum(y_predicted==0 & eegY==1)
+fn <- sum(y_predicted==1 & eegY==0)
+sens <- tp / (tp + fn)
+spec <- tn / (tn + fp)
+```

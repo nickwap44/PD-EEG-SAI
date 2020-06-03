@@ -1,0 +1,181 @@
+---
+title: "SAI Regression"
+output: html_document
+---
+
+# Data Setup
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Clear environment}
+rm(list=ls())
+```
+
+```{r Load packages}
+library(plsRglm)
+library(pROC)
+library(glmnet)
+library(nnet)
+library(caret)
+```
+
+```{r Import dataset}
+eegsai <- read.csv("/Users/nickw/OneDrive/Documents/Work/IBIC/PD-EEG-SAI/github/data/eegsai_dataset.csv")
+eegsai <- na.omit(eegsai,cols="on_sai_sai")
+```
+
+```{r Drop unneeded columns}
+drops <- c("sai_amp_zscore")
+eegsai <- eegsai[,!(names(eegsai) %in% drops)]
+```
+
+```{r Setup components for analysis}
+eegY<-c(scale(eegsai$on_sai_sai, center=TRUE, scale=TRUE))
+eegX <- eegsai[,!(names(eegsai) %in% "on_sai_sai")]
+eegX <- scale(eegX, center=TRUE, scale=TRUE)
+```
+
+```{r Setup input matrices}
+y.vec=eegY
+x.mat=(model.matrix(y.vec~eegX))[,-1]
+```
+
+# All Predictors
+
+## Ridge Regression (Linear Model) - Predict SAI for all predictors
+
+```{r Set seed and initialize parameters - ALL}
+set.seed(123)
+lambdas=10^seq(10,-2,length=200)
+```
+
+```{r Fit regression model - ALL}
+fit <- glmnet(x.mat, y.vec, alpha = 0, lambda = lambdas)
+summary(fit)
+```
+
+```{r Fit cross-validated model - ALL}
+cv_fit <- cv.glmnet(x.mat, y.vec, alpha = 0, lambda = lambdas)
+```
+
+```{r Plot the model fit - ALL}
+x11(); plot(cv_fit)
+opt_lambda <- cv_fit$lambda.min
+cv_mse<-cv_fit$cvm[cv_fit$lambda==opt_lambda]
+fit <- cv_fit$glmnet.fit
+summary(fit)
+```
+
+```{r Use the model to predict SAI for each subject - ALL}
+y_predicted <- predict(fit, s = opt_lambda, newx = x.mat)
+```
+
+```{r Calculate summary statistics - ALL}
+mse_lambdas <- cv_fit$cvm
+mse <- mean((y_predicted - y.vec)^2)
+sst <- sum((y.vec - mean(y.vec))^2)
+sse <- sum((y_predicted - y.vec)^2)
+rsq <- 1 - sse / sst
+rsq
+```
+
+```{r Plot mean-squared error - ALL}
+x11(); 
+plot(log(lambdas), mse_lambdas, type="n")
+lines(log(lambdas), mse_lambdas)
+points(log(lambdas), mse_lambdas)
+abline(v=log(opt_lambda),lty=2) #indicates the optimal value of the tuning parameter
+round(c(opt_lambda, cv_mse, mse, rsq),5)
+```
+
+## Neural Network - Predict SAI for all predictors
+
+```{r Setup table and parameters - ALL}
+nnettable <- cbind(eegY,eegX)
+set.seed(123)
+mygrid <- expand.grid(.decay=c(0.1, 0.5, 0.8, 1.2), .size=c(2,3,4,5,6,7,8))
+```
+
+```{r Train the model - ALL}
+nnetfit <- train(eegY ~ ., data=nnettable, method="nnet", maxit=1000, tuneGrid=mygrid, trace=F) 
+print(nnetfit)
+results <- nnetfit$results
+results <- results[results$decay==1.2,]
+```
+
+```{r Plot the results - ALL}
+x11(); plot(results$size,results$RMSE^2,type="b",xlab="Size",ylab="Mean-Squared Error")
+```
+
+# PD Subset
+
+```{r Subset to PD index}
+col.n<-c("RelativePower_Delta_FC", "RelativePower_Theta_FC","RelativePower_Theta_PO", "OBL_Delta_FC","OBL_Delta_PO", "DFE_Theta_FC","DFE_Alpha_PO","DFE_Beta_FC", "CentralFreq_Theta_FC","CentralFreq_Alpha_PO","CentralFreq_Beta_PO", "Bandwidth_Delta_PO", "Bandwidth_Theta_PO", "Bandwidth_Beta_PO","sex","age","group","cognitive_status")
+match.ind<-match(col.n, colnames(eegX))
+eegX<-eegX[,match.ind]
+y.vec=eegY
+x.mat=(model.matrix(y.vec~eegX))[,-1]
+```
+
+## Ridge Regression (Linear Model) - Predict SAI for PD Subset
+
+```{r Set seed and initialize parameters - PD}
+set.seed(123)
+lambdas=10^seq(10,-2,length=200)
+```
+
+```{r Fit regression model - PD}
+fit <- glmnet(x.mat, y.vec, alpha = 0, lambda = lambdas)
+summary(fit)
+```
+
+```{r Fit cross-validated model - PD}
+cv_fit <- cv.glmnet(x.mat, y.vec, alpha = 0, lambda = lambdas)
+x11(); plot(cv_fit)
+opt_lambda <- cv_fit$lambda.min
+cv_mse<-cv_fit$cvm[cv_fit$lambda==opt_lambda]
+fit <- cv_fit$glmnet.fit
+summary(fit)
+```
+
+```{r Use the model to predict SAI for each subject - PD}
+y_predicted <- predict(fit, s = opt_lambda, newx = x.mat)
+```
+
+```{r Calculate summary statistics - PD}
+mse <- mean((y_predicted - y.vec)^2)
+sst <- sum((y.vec - mean(y.vec))^2)
+sse <- sum((y_predicted - y.vec)^2)
+rsq <- 1 - sse / sst
+rsq
+```
+
+```{r Plot mean-squared error - PD}
+x11(); 
+plot(log(lambdas), mse_lambdas, type="n")
+lines(log(lambdas), mse_lambdas)
+points(log(lambdas), mse_lambdas)
+abline(v=log(opt_lambda),lty=2) #indicates the optimal value of the tuning parameter
+round(c(opt_lambda, cv_mse, mse, rsq),5)
+```
+
+## Neural Network - Predict SAI for PD subset
+
+```{r Setup table and parameters - PD}
+nnettable <- cbind(eegY,eegX)
+set.seed(123)
+mygrid <- expand.grid(.decay=c(0.1, 0.5, 0.8, 1.2), .size=c(2,3,4,5,6,7,8))
+```
+
+```{r Train the model - PD}
+nnetfit <- train(eegY ~ ., data=nnettable, method="nnet", maxit=1000, tuneGrid=mygrid, trace=F) 
+print(nnetfit)
+results <- nnetfit$results
+results <- results[results$decay==1.2,]
+```
+
+```{r Plot the results - PD}
+x11(); plot(results$size,results$RMSE^2,type="b",xlab="Size",ylab="Mean-Squared Error")
+```
