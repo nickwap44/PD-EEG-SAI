@@ -5,7 +5,7 @@ We tested: 1) whether including cognitive status improved the ability of QEEG me
 
 ## Methods
 
-Sixty-two participants with PD and 37 non-PD comparison participants received a resting EEG scan and a subset (23 PD, 20 non-PD) completed an SAI protocol using transcutaneous magnetic stimulation (TMS). Relative power, oscillation burst lifetime (OBL), detrended fluctuation exponent, central frequency, and bandwidth were calculated for 4 frequency bands (delta, theta, alpha, and beta) measured on two bipolar derivations (Fz-Cz and Pz-Oz). 
+Sixty-two participants with PD and 37 non-PD comparison participants received a resting EEG scan and a subset (23 PD, 20 non-PD) completed an SAI protocol using transcranial magnetic stimulation (TMS). Relative power, oscillation burst lifetime (OBL), detrended fluctuation exponent, central frequency, and bandwidth were calculated for 4 frequency bands (delta, theta, alpha, and beta) measured on two bipolar derivations (Fz-Cz and Pz-Oz). 
 
 ## Results
 
