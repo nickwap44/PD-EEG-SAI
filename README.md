@@ -9,7 +9,7 @@ Sixty-two participants with PD and 37 non-PD comparison participants received a 
 
 ## Results
 
-A set of 14 QEEG predictors correctly classified 63.5% of PD participants, and mild cognitive impairment (MCI) had little to no effect on the predictivity. QEEG measures that distinguish PD from non-PD were not predictive of SAI.
+A set of 14 QEEG predictors correctly classified 63.5% of PD participants, and mild cognitive impairment (MCI) had little to no effect on predictivitive ability. QEEG measures that distinguish PD from non-PD were not predictive of SAI.
 
 ## Models
 
