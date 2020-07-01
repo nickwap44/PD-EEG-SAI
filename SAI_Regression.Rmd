@@ -102,11 +102,11 @@ mygrid <- expand.grid(.decay=c(0.1, 0.5, 0.8, 1.2), .size=c(2,3,4,5,6,7,8))
 nnetfit <- train(eegY ~ ., data=nnettable, method="nnet", maxit=1000, tuneGrid=mygrid, trace=F) 
 print(nnetfit)
 results <- nnetfit$results
-results <- results[results$decay==1.2,]
+results <- results[results$decay==0.5,]
 ```
 
 ```{r Plot the results - ALL}
-x11(); plot(results$size,results$RMSE^2,type="b",xlab="Size",ylab="Mean-Squared Error")
+plot(results$size,results$RMSE^2,type="b",xlab="Size",ylab="Mean-Squared Error")
 ```
 
 # PD Subset
@@ -173,9 +173,9 @@ mygrid <- expand.grid(.decay=c(0.1, 0.5, 0.8, 1.2), .size=c(2,3,4,5,6,7,8))
 nnetfit <- train(eegY ~ ., data=nnettable, method="nnet", maxit=1000, tuneGrid=mygrid, trace=F) 
 print(nnetfit)
 results <- nnetfit$results
-results <- results[results$decay==1.2,]
+results <- results[results$decay==0.1,]
 ```
 
 ```{r Plot the results - PD}
-x11(); plot(results$size,results$RMSE^2,type="b",xlab="Size",ylab="Mean-Squared Error")
+plot(results$size,results$RMSE^2,type="b",xlab="Size",ylab="Mean-Squared Error")
 ```
