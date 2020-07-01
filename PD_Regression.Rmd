@@ -22,7 +22,7 @@ library(caret)
 ```
 
 ```{r Import dataset}
-eeg <- read.csv("/Users/nickw/OneDrive/Documents/Work/IBIC/PD-EEG-SAI/github/data/eegonly_dataset.csv")
+eeg <- read.csv("../data/eegonly_dataset.csv")
 ```
 
 # Partial Least Squares for Logistic Regression -- cognitive status included
