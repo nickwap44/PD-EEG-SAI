@@ -22,7 +22,7 @@ library(caret)
 ```
 
 ```{r Import dataset}
-eegsai <- read.csv("/Users/nickw/OneDrive/Documents/Work/IBIC/PD-EEG-SAI/github/data/eegsai_dataset.csv")
+eegsai <- read.csv("../data/eegsai_dataset.csv")
 eegsai <- na.omit(eegsai,cols="on_sai_sai")
 ```
 
