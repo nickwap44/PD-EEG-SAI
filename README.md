@@ -1,5 +1,5 @@
 # PD-EEG-SAI, Data and Models
-This repository contains the electroencephalography (EEG), short-latency afferent inhibition (SAI), and cognitive data and associated models designed to reproduce and explain the results in *Electrophysiological and Cognitive Correlates of Short Latency Afferent Inhibition in Parkinson’s Disease* by Wapstra et al.
+This repository contains the electroencephalography (EEG), short-latency afferent inhibition (SAI), and cognitive statistical models and code designed to reproduce and explain the results in *Electrophysiological and Cognitive Correlates of Short Latency Afferent Inhibition in Parkinson’s Disease* by Wapstra et al.
 
 We tested: 1) whether including cognitive status improved the ability of QEEG metrics to differentiate between Parkinson's Disease (PD) and non-PD; and 2) whether quantitative EEG (QEEG) measures that distinguish PD from non-PD were predictive of SAI.
 
@@ -34,7 +34,7 @@ This model was used to measure the predictive power of the EEG-SAI sample of QEE
 
 **Feedforward Neural Network (SAI) -- SAI_Regression.Rmd**
 
-To verify the findings from the EEG-SAI ridge regression models, feedforward neural network models were implemented. The R package “nnet” was used for implementation [4]. Feed-forward neural networks work by using the gradient descent algorithm. Weights are selected through nonlinear optimization to minimize the mean squared error over a training set. Each weight is then iteratively changed proportionally to its effect on the error. The cross-validated MSE was calculated for various values of the decay parameter (regularization parame-ter to avoid over-fitting) and the number of units in hidden layer.
+To verify the findings from the EEG-SAI ridge regression models, feed-forward neural network models were implemented for all predictors and the PD subset of predictors. The R package “nnet” was used for implementation [4]. The feed-forward neural network was selected as a verification model adjusts itself to the presence of multicollinearity. The neural network distributes predictor value inputs to units in a single ‘hidden layer’ (see Figure 6). The hidden layer units compute the weighted sum of these inputs, tuned by a regularization constant that smooths the weight profile. The hidden and output layer both use a logistic activation function [4]. The number of units in a hidden layer and their input smoothing constant were se-lected by iteration through a preselected set of values for the two parameters. During each itera-tion, input weights to hidden and output layers were selected through nonlinear optimization to minimize the mean squared error of regression. The iteration with the lowest error was deemed the best parameterization of the hidden layer and was used for final regression estimates. 
 
 ## References
 
