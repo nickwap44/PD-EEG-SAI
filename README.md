@@ -1,6 +1,8 @@
 # PD-EEG-SAI, Data and Models
 This repository contains the electroencephalography (EEG), short-latency afferent inhibition (SAI), and cognitive statistical models and code designed to reproduce and explain the results in *Electrophysiological and Cognitive Correlates of Short Latency Afferent Inhibition in Parkinson’s Disease* by Wapstra et al.
 
+Special thanks to Adel Lee for her contribution to this statistical analysis.
+
 We tested: 1) whether including cognitive status improved the ability of QEEG metrics to differentiate between Parkinson's Disease (PD) and non-PD; and 2) whether quantitative EEG (QEEG) measures that distinguish PD from non-PD were predictive of SAI.
 
 ## Methods
